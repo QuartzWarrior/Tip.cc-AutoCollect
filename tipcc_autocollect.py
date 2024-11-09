@@ -1,4 +1,3 @@
-from os import listdir
 from asyncio import TimeoutError, sleep, CancelledError
 from datetime import datetime, UTC
 from logging import (
@@ -31,6 +30,7 @@ from math import (
     tan,
     tau,
 )
+from os import listdir
 from random import randint, uniform
 from re import compile
 from time import time
@@ -508,7 +508,7 @@ if config["FIRST"]:
     target_amount = float(
         text(
             "What is the target amount you want to tip your main at? Set it to 0 to disable.",
-            validate=lambda x: validate_decimal(x),
+            validate=lambda x: validate_decimal(x) or x.isnumeric(),
             default="0",
             qmark="->",
         ).ask()
@@ -633,36 +633,37 @@ async def on_message(original_message: Message):
             configuration = default
     else:
         configuration = default
-    if (
+    if (any([True if word in original_message.content.split(" ")[0] else False for word in
+             ["airdrop", "phrasedrop", "triviadrop", "mathdrop", "redenvelope", "redpacket"]]) and
             not any(word in original_message.content.lower() for word in banned_words)
             and (
-            not config["WHITELIST_ON"]
-            or (
-                    config["WHITELIST_ON"]
-                    and original_message.guild.id in config["WHITELIST"]
+                    not config["WHITELIST_ON"]
+                    or (
+                            config["WHITELIST_ON"]
+                            and original_message.guild.id in config["WHITELIST"]
+                    )
             )
-    )
             and (
-            not config["BLACKLIST_ON"]
-            or (
-                    config["BLACKLIST_ON"]
-                    and original_message.guild.id not in config["BLACKLIST"]
+                    not config["BLACKLIST_ON"]
+                    or (
+                            config["BLACKLIST_ON"]
+                            and original_message.guild.id not in config["BLACKLIST"]
+                    )
             )
-    )
             and (
-            not configuration["CHANNEL_WHITELIST_ON"]
-            or (
-                    configuration["CHANNEL_WHITELIST_ON"]
-                    and original_message.channel.id in configuration["CHANNEL_WHITELIST"]
+                    not configuration["CHANNEL_WHITELIST_ON"]
+                    or (
+                            configuration["CHANNEL_WHITELIST_ON"]
+                            and original_message.channel.id in configuration["CHANNEL_WHITELIST"]
+                    )
             )
-    )
             and (
-            not configuration["CHANNEL_BLACKLIST_ON"]
-            or (
-                    configuration["CHANNEL_BLACKLIST_ON"]
-                    and original_message.channel.id not in configuration["CHANNEL_BLACKLIST"]
+                    not configuration["CHANNEL_BLACKLIST_ON"]
+                    or (
+                            configuration["CHANNEL_BLACKLIST_ON"]
+                            and original_message.channel.id not in configuration["CHANNEL_BLACKLIST"]
+                    )
             )
-    )
             and original_message.author.id not in configuration["IGNORE_USERS"]
     ):
         logger.debug(
@@ -691,12 +692,15 @@ async def on_message(original_message: Message):
             embed = tip_cc_message.embeds[0]
         else:
             content_lines = tip_cc_message.content.split("\n")
+            logger.debug(content_lines)
             timestamp = datetime.fromtimestamp(int(content_lines[-1].split("<t:")[1].split(":")[0].split(">")[0]), UTC)
-            embed = Embed(title=content_lines[0], description="\n".join(content_lines[1:len(content_lines) - 2]),
+            logger.debug(timestamp)
+            embed = Embed(title=content_lines[0], description="\n".join(content_lines[1:len(content_lines) - 1]),
                           timestamp=timestamp)
             embed.set_footer(text=content_lines[-1])
         if "$" not in embed.description or "≈" not in embed.description:
             money = 0.0
+            logger.debug("No money found, defaulting to 0")
         else:
             try:
                 money = float(
@@ -712,14 +716,9 @@ async def on_message(original_message: Message):
                 )
                 return
         if money < configuration["IGNORE_DROPS_UNDER"]:
-            try:
-                logger.info(
-                    f"Ignored drop for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
-                )
-            except IndexError:
-                logger.exception(
-                    "Index error occurred during ignored drop logging, skipping..."
-                )
+            logger.info(
+                f"Ignored drop for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
+            )
             return
         for threshold in configuration["IGNORE_THRESHOLDS"]:
             logger.debug(
