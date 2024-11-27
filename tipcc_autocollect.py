@@ -34,11 +34,12 @@ from os import listdir
 from random import randint, uniform
 from re import compile
 from time import time
+from typing import Dict, List, Union, Optional
 from urllib.parse import quote, unquote
 
 from aiohttp import ClientSession
 from art import tprint
-from discord import Client, HTTPException, LoginFailure, Message, NotFound, Status, Embed
+from discord import Client, HTTPException, LoginFailure, Message, NotFound, Status, Embed, TextChannel, Button
 from discord.ext import tasks
 from questionary import checkbox, select, text
 
@@ -99,7 +100,8 @@ except (ModuleNotFoundError, ImportError):
 else:
     logger.info("ujson found, using ujson.")
 
-channel = None
+channel: Optional[TextChannel] = None
+DropConfig = Dict[str, Union[bool, List[Union[int, float]], List[str], float, List[Dict[str, Union[float, int]]]]]
 
 print("\033[0;35m")
 tprint("QuartzWarrior", font="smslant")
@@ -126,14 +128,10 @@ except (FileNotFoundError, JSONDecodeError):
 
 try:
     with open("servers/default.json", "r") as f:
-        default = load(f)
+        default: Dict[str, Union[List[str], DropConfig, bool, float, List[int]]] = load(f)
 except (FileNotFoundError, JSONDecodeError):
-    default = {
-        "CPM": [200, 310],
-        "SMART_DELAY": True,
-        "RANGE_DELAY": False,
-        "DELAY": [0, 1],
-        "BANNED_WORDS": ["bot", "ban"],
+    default: Dict[str, Union[List[str], DropConfig, bool, float, List[int]]] = {
+        "BANNED_WORDS": [],
         "MESSAGES": [],
         "CHANNEL_WHITELIST": [],
         "CHANNEL_BLACKLIST": [],
@@ -144,16 +142,84 @@ except (FileNotFoundError, JSONDecodeError):
         "IGNORE_DROPS_UNDER": 0.0,
         "IGNORE_TIME_UNDER": 0.0,
         "IGNORE_THRESHOLDS": [],
-        "DISABLE_AIRDROP": False,
-        "DISABLE_TRIVIADROP": False,
-        "DISABLE_MATHDROP": False,
-        "DISABLE_PHRASEDROP": False,
-        "DISABLE_REDPACKET": False,
-        "DELAY_AIRDROP": True,
-        "DELAY_TRIVIADROP": True,
-        "DELAY_MATHDROP": True,
-        "DELAY_PHRASEDROP": True,
-        "DELAY_REDPACKET": False,
+        "AIRDROP": {
+            "ENABLED": True,
+            "SMART_DELAY": True,
+            "RANGE_DELAY": False,
+            "DELAY": [
+                0,
+                1
+            ],
+            "SEND_MESSAGE": False,
+            "MESSAGES": [],
+            "IGNORE_DROP_UNDER": 0.0,
+            "IGNORE_TIME_UNDER": 0.0,
+            "IGNORE_THRESHOLDS": []
+        },
+        "TRIVIADROP": {
+            "ENABLED": True,
+            "SMART_DELAY": True,
+            "RANGE_DELAY": False,
+            "DELAY": [
+                0,
+                1
+            ],
+            "SEND_MESSAGE": False,
+            "MESSAGES": [],
+            "IGNORE_DROP_UNDER": 0.0,
+            "IGNORE_TIME_UNDER": 0.0,
+            "IGNORE_THRESHOLDS": []
+        },
+        "MATHDROP": {
+            "ENABLED": True,
+            "CPM": [
+                200,
+                310
+            ],
+            "SMART_DELAY": True,
+            "RANGE_DELAY": False,
+            "DELAY": [
+                0,
+                1
+            ],
+            "SEND_MESSAGE": False,
+            "MESSAGES": [],
+            "IGNORE_DROP_UNDER": 0.0,
+            "IGNORE_TIME_UNDER": 0.0,
+            "IGNORE_THRESHOLDS": []
+        },
+        "PHRASEDROP": {
+            "ENABLED": True,
+            "CPM": [
+                200,
+                310
+            ],
+            "SMART_DELAY": True,
+            "RANGE_DELAY": False,
+            "DELAY": [
+                0,
+                1
+            ],
+            "SEND_MESSAGE": False,
+            "MESSAGES": [],
+            "IGNORE_DROP_UNDER": 0.0,
+            "IGNORE_TIME_UNDER": 0.0,
+            "IGNORE_THRESHOLDS": []
+        },
+        "REDPACKET": {
+            "ENABLED": True,
+            "SMART_DELAY": True,
+            "RANGE_DELAY": False,
+            "DELAY": [
+                0,
+                1
+            ],
+            "SEND_MESSAGE": False,
+            "MESSAGES": [],
+            "IGNORE_DROP_UNDER": 0.0,
+            "IGNORE_TIME_UNDER": 0.0,
+            "IGNORE_THRESHOLDS": []
+        }
     }
     with open("servers/default.json", "w") as f:
         dump(default, f, indent=4)
@@ -214,280 +280,7 @@ if config["FIRST"]:
         default="invisible",
         qmark="->",
     ).ask()
-    default["CPM"][0] = int(
-        text(
-            "What is your minimum CPM (Characters Per Minute)?\nThis is to make the phrase drop collector more legit.\nRemember, the higher the faster!",
-            default="200",
-            qmark="->",
-            validate=lambda x: (validate_decimal(x) or x.isnumeric()) and float(x) >= 0,
-        ).ask()
-    )
-    default["CPM"][1] = int(
-        text(
-            "What is your maximum CPM (Characters Per Minute)?\nThis is to make the phrase drop collector more legit.\nRemember, the higher the faster!",
-            default="310",
-            qmark="->",
-            validate=lambda x: (validate_decimal(x) or x.isnumeric()) and float(x) >= 0,
-        ).ask()
-    )
     config["FIRST"] = False
-    default["DISABLE_AIRDROP"] = False
-    default["DISABLE_TRIVIADROP"] = False
-    default["DISABLE_MATHDROP"] = False
-    default["DISABLE_PHRASEDROP"] = False
-    default["DISABLE_REDPACKET"] = False
-    default["DELAY_AIRDROP"] = True
-    default["DELAY_TRIVIADROP"] = True
-    default["DELAY_MATHDROP"] = True
-    default["DELAY_PHRASEDROP"] = True
-    default["DELAY_REDPACKET"] = False
-    disable_drops = checkbox(
-        "What drop types do you want to disable? (Leave blank for none)",
-        choices=[
-            "airdrop",
-            "triviadrop",
-            "mathdrop",
-            "phrasedrop",
-            "redpacket",
-        ],
-        qmark="->",
-    ).ask()
-    if not disable_drops:
-        disable_drops = []
-    if "airdrop" in disable_drops:
-        default["DISABLE_AIRDROP"] = True
-    if "triviadrop" in disable_drops:
-        default["DISABLE_TRIVIADROP"] = True
-    if "mathdrop" in disable_drops:
-        default["DISABLE_MATHDROP"] = True
-    if "phrasedrop" in disable_drops:
-        default["DISABLE_PHRASEDROP"] = True
-    if "redpacket" in disable_drops:
-        default["DISABLE_REDPACKET"] = True
-    delay_drops = checkbox(
-        "What drop types do you want to enable delay for? (Leave blank for none)",
-        choices=[
-            "airdrop",
-            "triviadrop",
-            "mathdrop",
-            "phrasedrop",
-            "redpacket",
-        ],
-        qmark="->",
-    ).ask()
-    if not delay_drops:
-        delay_drops = []
-    if "airdrop" in delay_drops:
-        default["DELAY_AIRDROP"] = True
-    if "triviadrop" in delay_drops:
-        default["DELAY_TRIVIADROP"] = True
-    if "mathdrop" in delay_drops:
-        default["DELAY_MATHDROP"] = True
-    if "phrasedrop" in delay_drops:
-        default["DELAY_PHRASEDROP"] = True
-    if "redpacket" in delay_drops:
-        default["DELAY_REDPACKET"] = True
-    ignore_drops_under = text(
-        "What is the minimum amount of money you want to ignore?",
-        default="0",
-        qmark="->",
-        validate=lambda x: ((validate_decimal(x) or x.isnumeric()) and float(x) >= 0)
-                           or x == "",
-    ).ask()
-    if ignore_drops_under != "":
-        default["IGNORE_DROPS_UNDER"] = float(ignore_drops_under)
-    else:
-        default["IGNORE_DROPS_UNDER"] = 0.0
-    ignore_time_under = text(
-        "What is the minimum time you want to ignore?",
-        default="0",
-        qmark="->",
-        validate=lambda x: ((validate_decimal(x) or x.isnumeric()) and float(x) >= 0)
-                           or x == "",
-    ).ask()
-    if ignore_time_under != "":
-        default["IGNORE_TIME_UNDER"] = float(ignore_time_under)
-    else:
-        default["IGNORE_TIME_UNDER"] = 0.0
-    ignore_thresholds = text(
-        "Enter your ignore thresholds and chances in the format 'threshold:chance', separated by commas (e.g. '0.10:10,0.20:20')",
-        validate=lambda x: all(validate_threshold_chance(pair) for pair in x.split(","))
-                           or x == "",
-        default="",
-        qmark="->",
-    ).ask()
-    if ignore_thresholds != "":
-        default["IGNORE_THRESHOLDS"] = [
-            {"threshold": float(pair.split(":")[0]), "chance": int(pair.split(":")[1])}
-            for pair in ignore_thresholds.split(",")
-        ]
-    else:
-        default["IGNORE_THRESHOLDS"] = []
-    smart_delay = select(
-        "Do you want to enable smart delay? (This will make the bot wait for the drop to end before claiming it)",
-        choices=["yes", "no"],
-        qmark="->",
-    ).ask()
-    if smart_delay == "yes":
-        default["SMART_DELAY"] = True
-    else:
-        default["SMART_DELAY"] = False
-        range_delay = select(
-            "Do you want to enable range delay? (This will make the bot wait for a random delay between two values)",
-            choices=["yes", "no"],
-            qmark="->",
-        ).ask()
-        if range_delay == "yes":
-            default["RANGE_DELAY"] = True
-            min_delay = text(
-                "What is the minimum delay you want to use in seconds?",
-                validate=lambda x: (validate_decimal(x) or x.isnumeric()) and float(x) >= 0,
-                qmark="->",
-            ).ask()
-            max_delay = text(
-                "What is the maximum delay you want to use in seconds?",
-                validate=lambda x: (validate_decimal(x) or x.isnumeric()) and float(x) >= 0,
-                qmark="->",
-            ).ask()
-            default["DELAY"] = [float(min_delay), float(max_delay)]
-        else:
-            manual_delay = text(
-                "What is the delay you want to use in seconds? (Leave blank for none)",
-                validate=lambda x: (validate_decimal(x) or x.isnumeric()) or x == "",
-                default="0",
-                qmark="->",
-            ).ask()
-            if manual_delay != "":
-                default["DELAY"] = [float(manual_delay), float(manual_delay)]
-            else:
-                default["DELAY"] = [0, 0]
-    banned_words = text(
-        "What words do you want to ban? Separate each word with a comma.",
-        validate=lambda x: len(x) > 0 or x == "",
-        qmark="->",
-    ).ask()
-    if not banned_words:
-        banned_words = []
-    else:
-        banned_words = banned_words.split(",")
-    default["BANNED_WORDS"] = banned_words
-    send_messages = select(
-        "Do you want to send messages after claiming a drop?",
-        choices=["yes", "no"],
-        qmark="->",
-    ).ask()
-    default["SEND_MESSAGE"] = send_messages == "yes"
-    if default["SEND_MESSAGE"]:
-        messages = text(
-            "What messages do you want to send after claiming a drop? Separate each message with a comma.",
-            validate=lambda x: len(x) > 0 or x == "",
-            qmark="->",
-        ).ask()
-        if not messages:
-            messages = []
-        else:
-            messages = messages.split(",")
-        default["MESSAGES"] = messages
-    enable_whitelist = select(
-        "Do you want to enable whitelist? (This will only enter drops in the servers you specify)",
-        choices=["yes", "no"],
-        qmark="->",
-    ).ask()
-    config["WHITELIST_ON"] = enable_whitelist == "yes"
-    if not config["WHITELIST_ON"]:
-        enable_blacklist = select(
-            "Do you want to enable blacklist? (This will ignore drops in the servers you specify)",
-            choices=["yes", "no"],
-            qmark="->",
-        ).ask()
-        config["BLACKLIST_ON"] = enable_blacklist == "yes"
-        if config["BLACKLIST_ON"]:
-            blacklist = text(
-                "What servers do you want to blacklist? Separate each server ID with a comma.",
-                validate=lambda x: (
-                                           len(x) > 0
-                                           and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
-                                   )
-                                   or x == "",
-                qmark="->",
-            ).ask()
-            if not blacklist:
-                blacklist = []
-            else:
-                blacklist = [int(x) for x in blacklist.split(",")]
-            config["BLACKLIST"] = blacklist
-    else:
-        whitelist = text(
-            "What servers do you want to whitelist? Separate each server ID with a comma.",
-            validate=lambda x: (
-                                       len(x) > 0
-                                       and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
-                               )
-                               or x == "",
-            qmark="->",
-        ).ask()
-        if not whitelist:
-            whitelist = []
-        else:
-            whitelist = [int(x) for x in whitelist.split(",")]
-        config["WHITELIST"] = whitelist
-    enable_channel_whitelist = select(
-        "Do you want to enable channel whitelist? (This will only enter drops in the channels you specify)",
-        choices=["yes", "no"],
-        qmark="->",
-    ).ask()
-    default["CHANNEL_WHITELIST_ON"] = enable_channel_whitelist == "yes"
-    if not default["CHANNEL_WHITELIST_ON"]:
-        enable_blacklist = select(
-            "Do you want to enable channel blacklist? (This will ignore drops in the channels you specify)",
-            choices=["yes", "no"],
-            qmark="->",
-        ).ask()
-        default["CHANNEL_BLACKLIST_ON"] = enable_blacklist == "yes"
-        if default["CHANNEL_BLACKLIST_ON"]:
-            blacklist = text(
-                "What channels do you want to blacklist? Separate each channel ID with a comma.",
-                validate=lambda x: (
-                                           len(x) > 0
-                                           and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
-                                   )
-                                   or x == "",
-                qmark="->",
-            ).ask()
-            if not blacklist:
-                blacklist = []
-            else:
-                blacklist = [int(x) for x in blacklist.split(",")]
-            default["CHANNEL_BLACKLIST"] = blacklist
-    else:
-        whitelist = text(
-            "What channels do you want to whitelist? Separate each channel ID with a comma.",
-            validate=lambda x: (
-                                       len(x) > 0
-                                       and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
-                               )
-                               or x == "",
-            qmark="->",
-        ).ask()
-        if not whitelist:
-            whitelist = []
-        else:
-            whitelist = [int(x) for x in whitelist.split(",")]
-        default["CHANNEL_WHITELIST"] = whitelist
-    ignore_users = text(
-        "What users do you want to ignore? Separate each user ID with a comma.",
-        validate=lambda x: (
-                                   len(x) > 0
-                                   and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
-                           )
-                           or x == "",
-        qmark="->",
-    ).ask()
-    if not ignore_users:
-        ignore_users = []
-    else:
-        ignore_users = [int(x) for x in ignore_users.split(",")]
-    default["IGNORE_USERS"] = ignore_users
     user_id = int(
         text(
             "What is your main accounts id?\n\nIf you are sniping from your main, put your main accounts' id.",
@@ -514,9 +307,279 @@ if config["FIRST"]:
         ).ask()
     )
     config["TARGET_AMOUNT"] = target_amount
+    enable_whitelist = select(
+        "Do you want to enable server whitelist?",
+        choices=["yes", "no"],
+        qmark="->",
+    ).ask()
+    config["WHITELIST_ON"] = enable_whitelist == "yes"
+    if config["WHITELIST_ON"]:
+        whitelist = text(
+            "What servers do you want to whitelist? Separate each server ID with a comma.",
+            validate=lambda x: (
+                                       len(x) > 0
+                                       and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
+                               )
+                               or x == "",
+            qmark="->",
+        ).ask()
+        if not whitelist:
+            whitelist = []
+        else:
+            whitelist = [int(x) for x in whitelist.split(",")]
+        config["WHITELIST"] = whitelist
+    else:
+        enable_blacklist = select(
+            "Do you want to enable server blacklist?",
+            choices=["yes", "no"],
+            qmark="->",
+        ).ask()
+        config["BLACKLIST_ON"] = enable_blacklist == "yes"
+        if config["BLACKLIST_ON"]:
+            blacklist = text(
+                "What servers do you want to blacklist? Separate each server ID with a comma.",
+                validate=lambda x: (
+                                           len(x) > 0
+                                           and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
+                                   )
+                                   or x == "",
+                qmark="->",
+            ).ask()
+            if not blacklist:
+                blacklist = []
+            else:
+                blacklist = [int(x) for x in blacklist.split(",")]
+            config["BLACKLIST"] = blacklist
     with open("config.json", "w") as f:
         dump(config, f, indent=4)
     logger.debug("Config saved.")
+    logger.info("Account configuration finished. Now configuring server settings.")
+    banned_words = text(
+        "What words do you want to ban? Separate each word with a comma.",
+        qmark="->",
+    ).ask()
+    if not banned_words:
+        banned_words = ["bot", "ban", "kick", "raid", "scam", "scammer", "scamming", "scammed", "scamming",
+                        "scamming", ]
+    else:
+        banned_words = banned_words.split(",")
+    default["BANNED_WORDS"] = banned_words
+    ignore_drops_under = text(
+        "What is the minimum amount of money you want to ignore for all drops?",
+        default="0",
+        qmark="->",
+        validate=lambda x: ((validate_decimal(x) or x.isnumeric()) and float(x) >= 0)
+                           or x == "",
+    ).ask()
+    if ignore_drops_under != "":
+        default["IGNORE_DROPS_UNDER"] = float(ignore_drops_under)
+    else:
+        default["IGNORE_DROPS_UNDER"] = 0.0
+    ignore_time_under = text(
+        "What is the minimum time you want to ignore for all drops?",
+        default="0",
+        qmark="->",
+        validate=lambda x: ((validate_decimal(x) or x.isnumeric()) and float(x) >= 0)
+                           or x == "",
+    ).ask()
+    if ignore_time_under != "":
+        default["IGNORE_TIME_UNDER"] = float(ignore_time_under)
+    else:
+        default["IGNORE_TIME_UNDER"] = 0.0
+    ignore_thresholds = text(
+        "Enter your ignore thresholds and chances for all drops in the format 'threshold:chance', separated by commas (e.g. '0.10:10,0.20:20')",
+        validate=lambda x: all(validate_threshold_chance(pair) for pair in x.split(","))
+                           or x == "",
+        default="",
+        qmark="->",
+    ).ask()
+    if ignore_thresholds != "":
+        default["IGNORE_THRESHOLDS"] = [
+            {"threshold": float(pair.split(":")[0]), "chance": int(pair.split(":")[1])}
+            for pair in ignore_thresholds.split(",")
+        ]
+    else:
+        default["IGNORE_THRESHOLDS"] = []
+    enable_channel_whitelist = select(
+        "Do you want to enable channel whitelist for all drops?",
+        choices=["yes", "no"],
+        qmark="->",
+    ).ask()
+    default["CHANNEL_WHITELIST_ON"] = enable_channel_whitelist == "yes"
+    if not default["CHANNEL_WHITELIST_ON"]:
+        enable_channel_blacklist = select(
+            "Do you want to enable channel blacklist for all drops?",
+            choices=["yes", "no"],
+            qmark="->",
+        ).ask()
+        default["CHANNEL_BLACKLIST_ON"] = enable_channel_blacklist == "yes"
+        if default["CHANNEL_BLACKLIST_ON"]:
+            blacklist = text(
+                "What channels do you want to blacklist for all drops? Separate each channel ID with a comma.",
+                validate=lambda x: (
+                                           len(x) > 0
+                                           and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
+                                   )
+                                   or x == "",
+                qmark="->",
+            ).ask()
+            if not blacklist:
+                blacklist = []
+            else:
+                blacklist = [int(x) for x in blacklist.split(",")]
+            default["CHANNEL_BLACKLIST"] = blacklist
+    else:
+        whitelist = text(
+            "What channels do you want to whitelist for all drops? Separate each channel ID with a comma.",
+            validate=lambda x: (
+                                       len(x) > 0
+                                       and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
+                               )
+                               or x == "",
+            qmark="->",
+        ).ask()
+        if not whitelist:
+            whitelist = []
+        else:
+            whitelist = [int(x) for x in whitelist.split(",")]
+        default["CHANNEL_WHITELIST"] = whitelist
+    ignore_users = text(
+        "What users do you want to ignore for all drops? Separate each user ID with a comma.",
+        validate=lambda x: (
+                                   len(x) > 0
+                                   and all(y.isnumeric() and 17 <= len(y) <= 19 for y in x.split(","))
+                           )
+                           or x == "",
+        qmark="->",
+    ).ask()
+    if not ignore_users:
+        ignore_users = []
+    else:
+        ignore_users = [int(x) for x in ignore_users.split(",")]
+    default["IGNORE_USERS"] = ignore_users
+    choices = ["airdrop", "triviadrop", "mathdrop", "phrasedrop", "redpacket"]
+    disable_drops = checkbox(
+        "What drop types do you want to disable? (Leave blank for none)",
+        choices=choices,
+        qmark="->",
+    ).ask()
+    if not disable_drops:
+        disable_drops = []
+    for drop in disable_drops:
+        default[drop.upper()]["ENABLED"] = False
+    choices = [
+        choice
+        for choice in choices
+        if choice not in disable_drops
+    ]
+    for drop in choices:
+        if drop == "phrasedrop" or drop == "mathdrop":
+            cpm = text(
+                f"What is the minimum CPM you want to use for {drop}?",
+                validate=lambda x: x.isnumeric() and 0 <= int(x) <= 1000,
+                qmark="->",
+            ).ask()
+            cpm_max = text(
+                f"What is the maximum CPM you want to use for {drop}?",
+                validate=lambda x: x.isnumeric() and 0 <= int(x) <= 1000,
+                qmark="->",
+            ).ask()
+            default[drop.upper()]["CPM"] = [int(cpm), int(cpm_max)]
+        smart_delay = select(
+            f"Do you want to enable smart delay for {drop}?",
+            choices=["yes", "no"],
+            qmark="->",
+        ).ask()
+        if smart_delay == "yes":
+            default[drop.upper()]["SMART_DELAY"] = True
+        else:
+            default[drop.upper()]["SMART_DELAY"] = False
+            range_delay = select(
+                f"Do you want to enable range delay for {drop}?",
+                choices=["yes", "no"],
+                qmark="->",
+            ).ask()
+            if range_delay == "yes":
+                default[drop.upper()]["RANGE_DELAY"] = True
+                min_delay = text(
+                    f"What is the minimum delay you want to use for {drop} in seconds?",
+                    validate=lambda x: (validate_decimal(x) or x.isnumeric()) and float(x) >= 0,
+                    qmark="->",
+                ).ask()
+                max_delay = text(
+                    f"What is the maximum delay you want to use for {drop} in seconds?",
+                    validate=lambda x: (validate_decimal(x) or x.isnumeric()) and float(x) >= 0,
+                    qmark="->",
+                ).ask()
+                default[drop.upper()]["DELAY"] = [float(min_delay), float(max_delay)]
+            else:
+                manual_delay = text(
+                    f"What is the delay you want to use for {drop} in seconds? (Leave blank for none)",
+                    validate=lambda x: (validate_decimal(x) or x.isnumeric()) or x == "",
+                    default="0",
+                    qmark="->",
+                ).ask()
+                if manual_delay != "":
+                    default[drop.upper()]["DELAY"] = [float(manual_delay), float(manual_delay)]
+                else:
+                    default[drop.upper()]["DELAY"] = [0, 0]
+        send_messages = select(
+            f"Do you want to send messages after claiming a {drop}?",
+            choices=["yes", "no"],
+            qmark="->",
+        ).ask()
+        default[drop.upper()]["SEND_MESSAGE"] = send_messages == "yes"
+        if default[drop.upper()]["SEND_MESSAGE"]:
+            messages = text(
+                f"What messages do you want to send after claiming a {drop}? Separate each message with a comma.",
+                validate=lambda x: len(x) > 0 or x == "",
+                qmark="->",
+            ).ask()
+            if not messages:
+                messages = []
+            else:
+                messages = messages.split(",")
+            default[drop.upper()]["MESSAGES"] = messages
+        ignore_drops_under = text(
+            f"What is the minimum amount of money you want to ignore for {drop}?",
+            default="0",
+            qmark="->",
+            validate=lambda x: ((validate_decimal(x) or x.isnumeric()) and float(x) >= 0)
+                               or x == "",
+        ).ask()
+        if ignore_drops_under != "":
+            default[drop.upper()]["IGNORE_DROP_UNDER"] = float(ignore_drops_under)
+        else:
+            default[drop.upper()]["IGNORE_DROP_UNDER"] = 0.0
+        ignore_time_under = text(
+            f"What is the minimum time you want to ignore for {drop}?",
+            default="0",
+            qmark="->",
+            validate=lambda x: ((validate_decimal(x) or x.isnumeric()) and float(x) >= 0)
+                               or x == "",
+        ).ask()
+        if ignore_time_under != "":
+            default[drop.upper()]["IGNORE_TIME_UNDER"] = float(ignore_time_under)
+        else:
+            default[drop.upper()]["IGNORE_TIME_UNDER"] = 0.0
+        ignore_thresholds = text(
+            f"Enter your ignore thresholds and chances for {drop} in the format 'threshold:chance', separated by commas (e.g. '0.10:10,0.20:20')",
+            validate=lambda x: all(validate_threshold_chance(pair) for pair in x.split(","))
+                               or x == "",
+            default="",
+            qmark="->",
+        ).ask()
+        if ignore_thresholds != "":
+            default[drop.upper()]["IGNORE_THRESHOLDS"] = [
+                {"threshold": float(pair.split(":")[0]), "chance": int(pair.split(":")[1])}
+                for pair in ignore_thresholds.split(",")
+            ]
+        else:
+            default[drop.upper()]["IGNORE_THRESHOLDS"] = []
+    with open("servers/default.json", "w") as f:
+        dump(default, f, indent=4)
+    logger.debug("Default server config saved.")
+    logger.info("Server configuration finished.")
 
 banned_words = set(default["BANNED_WORDS"])
 
@@ -584,7 +647,7 @@ async def tipping():
         button_disabled = True
     for _ in range(pages):
         try:
-            button = answer.components[0].children[1]
+            button: Button = answer.components[0].children[1]
             button_disabled = button.disabled
         except:
             button_disabled = True
@@ -633,8 +696,24 @@ async def on_message(original_message: Message):
             configuration = default
     else:
         configuration = default
-    if (any([True if word in original_message.content.split(" ")[0] else False for word in
-             ["airdrop", "phrasedrop", "triviadrop", "mathdrop", "redenvelope", "redpacket"]]) and
+    droptype = False
+    message_content_lowered = original_message.content.lower().split(" ")[0]
+    if any([True if word in message_content_lowered else False for word in
+            ["airdrop", "phrasedrop", "triviadrop", "mathdrop", "redenvelope", "redpacket"]]):
+        if "airdrop" in message_content_lowered:
+            droptype = "AIRDROP"
+        elif "phrasedrop" in message_content_lowered:
+            droptype = "PHRASEDROP"
+        elif "triviadrop" in message_content_lowered:
+            droptype = "TRIVIADROP"
+        elif "mathdrop" in message_content_lowered:
+            droptype = "MATHDROP"
+        elif "redenvelope" in message_content_lowered or "redpacket" in message_content_lowered:
+            droptype = "REDPACKET"
+        else:
+            return
+    if (droptype and configuration[droptype]["ENABLED"]
+            and
             not any(word in original_message.content.lower() for word in banned_words)
             and (
                     not config["WHITELIST_ON"]
@@ -715,7 +794,7 @@ async def on_message(original_message: Message):
                     "Index error occurred during money splitting, skipping..."
                 )
                 return
-        if money < configuration["IGNORE_DROPS_UNDER"]:
+        if money < configuration["IGNORE_DROPS_UNDER"] or money < configuration[droptype]["IGNORE_DROP_UNDER"]:
             logger.info(
                 f"Ignored drop for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
             )
@@ -734,27 +813,32 @@ async def on_message(original_message: Message):
                         f"Ignored drop from failed threshold for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
                     )
                     return
+        for threshold in configuration[droptype]["IGNORE_THRESHOLDS"]:
+            logger.debug(
+                f"Checking threshold: {threshold['threshold']} with chance: {threshold['chance']}"
+            )
+            if money <= threshold["threshold"]:
+                logger.debug(
+                    f"Drop value {money} is less than or equal to threshold {threshold['threshold']}"
+                )
+                random_number = randint(0, 100)
+                if random_number < threshold["chance"]:
+                    logger.info(
+                        f"Ignored drop from failed threshold for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
+                    )
+                    return
         logger.debug(f"Money: {money}")
         logger.debug(f"Drop ends in: {embed.timestamp.timestamp() - time()}")
         drop_ends_in = embed.timestamp.timestamp() - time()
-        if drop_ends_in < configuration["IGNORE_TIME_UNDER"]:
+        if drop_ends_in < configuration["IGNORE_TIME_UNDER"] or drop_ends_in < configuration[droptype][
+            "IGNORE_TIME_UNDER"]:
             logger.info(
                 f"Ignored drop for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
             )
             return
-        if (
-                "An airdrop appears" in embed.title
-                and configuration["DELAY_AIRDROP"]
-                or "Trivia time - " in embed.title
-                and configuration["DELAY_TRIVIADROP"]
-                or "Math" in embed.title
-                and configuration["DELAY_MATHDROP"]
-                or "Phrase drop!" in embed.title
-                and configuration["DELAY_PHRASEDROP"]
-                or "appeared" in embed.title
-                and configuration["DELAY_REDPACKET"]
-        ):
-            if configuration["SMART_DELAY"]:
+        if (configuration[droptype]["DELAY"] != [0, 0] or configuration[droptype]["SMART_DELAY"] or
+                configuration[droptype]["RANGE_DELAY"]):
+            if configuration[droptype]["SMART_DELAY"]:
                 logger.debug("Smart delay enabled, waiting...")
                 if drop_ends_in < 0:
                     logger.debug("Drop ended, skipping...")
@@ -763,21 +847,21 @@ async def on_message(original_message: Message):
                 logger.debug(f"Delay: {round(delay, 2)}")
                 await sleep(delay)
                 logger.info(f"Waited {round(delay, 2)} seconds before proceeding.")
-            elif configuration["RANGE_DELAY"]:
+            elif configuration[droptype]["RANGE_DELAY"]:
                 logger.debug("Range delay enabled, waiting...")
-                delay = uniform(configuration["DELAY"][0], configuration["DELAY"][1])
+                delay = uniform(configuration[droptype]["DELAY"][0], configuration[droptype]["DELAY"][1])
                 logger.debug(f"Delay: {delay}")
                 await sleep(delay)
                 logger.info(f"Waited {delay} seconds before proceeding.")
-            elif configuration["DELAY"] != [0, 0]:
-                logger.debug(f"Manual delay enabled, waiting {configuration['DELAY'][0]}...")
-                await sleep(configuration["DELAY"][0])
-                logger.info(f"Waited {configuration['DELAY'][0]} seconds before proceeding.")
+            elif configuration[droptype]["DELAY"] != [0, 0]:
+                logger.debug(f"Manual delay enabled, waiting {configuration[droptype]['DELAY'][0]}...")
+                await sleep(configuration[droptype]["DELAY"][0])
+                logger.info(f"Waited {configuration[droptype]['DELAY'][0]} seconds before proceeding.")
         try:
             if "ended" in embed.footer.text.lower():
                 logger.debug("Drop ended, skipping...")
                 return
-            elif "An airdrop appears" in embed.title and not configuration["DISABLE_AIRDROP"]:
+            elif droptype == "AIRDROP":
                 logger.debug("Airdrop detected, entering...")
                 try:
                     button = tip_cc_message.components[0].children[0]
@@ -791,7 +875,10 @@ async def on_message(original_message: Message):
                     logger.info(
                         f"Entered airdrop in {original_message.channel.name} for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
                     )
-            elif "Phrase drop!" in embed.title and not configuration["DISABLE_PHRASEDROP"]:
+                else:
+                    logger.exception("Button label not found, skipping...")
+                    return
+            elif droptype == "PHRASEDROP":
                 logger.debug("Phrasedrop detected, entering...")
                 content = embed.description.replace("\n", "").replace("**", "")
                 content = content.split("*")
@@ -802,14 +889,15 @@ async def on_message(original_message: Message):
                     return
                 else:
                     logger.debug("Typing and sending message...")
-                    length = len(content) / randint(configuration["CPM"][0], configuration["CPM"][1]) * 60
+                    length = len(content) / randint(configuration[droptype]["CPM"][0],
+                                                    configuration[droptype]["CPM"][1]) * 60
                     async with original_message.channel.typing():
                         await sleep(length)
                     await original_message.channel.send(content)
                     logger.info(
                         f"Entered phrasedrop in {original_message.channel.name} for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
                     )
-            elif "appeared" in embed.title and not configuration["DISABLE_REDPACKET"]:
+            elif droptype == "REDPACKET":
                 logger.debug("Redpacket detected, claiming...")
                 try:
                     button = tip_cc_message.components[0].children[0]
@@ -823,7 +911,10 @@ async def on_message(original_message: Message):
                     logger.info(
                         f"Claimed envelope in {original_message.channel.name} for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
                     )
-            elif "Math" in embed.title and not configuration["DISABLE_MATHDROP"]:
+                else:
+                    logger.exception("Button label not found, skipping...")
+                    return
+            elif droptype == "MATHDROP":
                 logger.debug("Mathdrop detected, entering...")
                 content = embed.description.replace("\n", "").replace("**", "")
                 content = content.split("`")
@@ -838,15 +929,16 @@ async def on_message(original_message: Message):
                     if isinstance(answer, float) and answer.is_integer():
                         answer = int(answer)
                     logger.debug(f"Answer: {answer}")
-                    if not configuration["SMART_DELAY"] and configuration["DELAY"] == 0:
-                        length = len(str(answer)) / randint(configuration["CPM"][0], configuration["CPM"][1]) * 60
+                    if not configuration[droptype]["SMART_DELAY"] and configuration[droptype]["DELAY"] == 0:
+                        length = len(str(answer)) / randint(configuration[droptype]["CPM"][0],
+                                                            configuration[droptype]["CPM"][1]) * 60
                         async with original_message.channel.typing():
                             await sleep(length)
                     await original_message.channel.send(answer)
                     logger.info(
                         f"Entered mathdrop in {original_message.channel.name} for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
                     )
-            elif "Trivia time - " in embed.title and not configuration["DISABLE_TRIVIADROP"]:
+            elif droptype == "TRIVIADROP":
                 logger.debug("Triviadrop detected, entering...")
                 category = embed.title.split("Trivia time - ")[1].strip()
                 bot_question = embed.description.replace("**", "").split("*")[1]
@@ -855,6 +947,7 @@ async def on_message(original_message: Message):
                             f"https://raw.githubusercontent.com/QuartzWarrior/OTDB-Source/main/{quote(category)}.csv"
                     ) as resp:
                         lines = (await resp.text()).splitlines()
+                        entered = False
                         for line in lines:
                             question, answer = line.split(",")
                             if bot_question.strip() == unquote(question).strip():
@@ -868,18 +961,30 @@ async def on_message(original_message: Message):
                                     return
                                 for button in buttons:
                                     if button.label.strip() == answer:
+                                        entered = True
                                         await button.click()
+                                        break
+                                if not entered:
+                                    logger.exception(
+                                        "Answer not found in buttons, skipping..."
+                                    )
+                                    return
                                 logger.info(
                                     f"Entered triviadrop in {original_message.channel.name} for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (', '')}"
                                 )
+                                break
+                        if not entered:
+                            logger.exception("Question not found in database, skipping...")
+                            return
             else:
                 logger.debug(f"Drop type non existent?!, skipping...\n{embed.title}")
                 return
-            if configuration["SEND_MESSAGE"]:
-                message = configuration["MESSAGES"][
-                    randint(0, len(configuration["MESSAGES"]) - 1)
+            if configuration[droptype]["SEND_MESSAGE"]:
+                message = configuration[droptype]["MESSAGES"][
+                    randint(0, len(configuration[droptype]["MESSAGES"]) - 1)
                 ]
-                length = len(message) / randint(configuration["CPM"][0], configuration["CPM"][1]) * 60
+                length = len(message) / randint(configuration["PHRASEDROP"]["CPM"][0],
+                                                configuration["PHRASEDROP"]["CPM"][1]) * 60
                 async with original_message.channel.typing():
                     await sleep(length)
                 await original_message.channel.send(message)
@@ -933,6 +1038,8 @@ async def on_message(original_message: Message):
         logger.info(
             f"User in ignore list detected in {original_message.channel.name}, skipping..."
         )
+    else:
+        return
 
 
 if __name__ == "__main__":
