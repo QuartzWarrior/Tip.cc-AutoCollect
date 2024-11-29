@@ -6,7 +6,7 @@ from discord import Client, Message
 
 class AirdropBot(Client):
     def __init__(self, config_path="config.json"):
-        super().__init__()
+        super().__init__() 
         self.config = self.load_config(config_path)  # Config is loaded first
         self.logger = self.setup_logger()  # Logger is set up after config
         self.pushbullet = Pushbullet(self.config.get("PUSHBULLET_API_KEY", ""))
