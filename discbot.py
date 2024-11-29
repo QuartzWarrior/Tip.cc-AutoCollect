@@ -41,8 +41,7 @@ class AirdropBot(Client):
         """Handle incoming messages."""
         
         self.logger.debug(message)
-        if message.author.bot or not message.embeds:
-            return
+      
 
         # Stake drop detection
         if self.stake_regex.search(message.content):
