@@ -40,7 +40,7 @@ class AirdropBot(Client):
     async def on_message(self, message: Message):
         """Handle incoming messages."""
         
-        self.logger.debug(message)
+        self.logger.info(message)
       
 
         # Stake drop detection
