@@ -39,6 +39,8 @@ class AirdropBot(Client):
 
     async def on_message(self, message: Message):
         """Handle incoming messages."""
+        
+        self.logger.debug(message)
         if message.author.bot or not message.embeds:
             return
 
