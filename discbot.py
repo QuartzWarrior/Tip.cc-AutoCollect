@@ -11,6 +11,7 @@ class AirdropBot(Client):
         self.logger = self.setup_logger()  # Logger is set up after config
         self.pushbullet = Pushbullet(self.config.get("PUSHBULLET_API_KEY", ""))
         self.airdrop_regex = compile(r"[$]airdrop|[$]phrasedrop|[$]mathdrop|[$]triviadrop|[$]redpacket")
+        self.droptxt_regex = compile(r"An airdrop appears")
         self.stake_regex = compile(r"https?:\/\/stake\.(us|com)\/settings(?:\/[^\s?]*)?(?:\?[^\s]*)?")
         self.detected_stake_codes = set()  # Keeps track of detected Stake.us bonus codes
 
@@ -39,8 +40,8 @@ class AirdropBot(Client):
 
     async def on_message(self, message: Message):
         """Handle incoming messages."""
-        
-        self.logger.info(message)
+        if message.embeds:
+            self.logger.info(message.embeds[0])
       
 
         # Stake drop detection
@@ -54,8 +55,9 @@ class AirdropBot(Client):
             return
 
         # Airdrop detection
-        if self.airdrop_regex.search(message.content):
+        if message.embeds and self.droptxt_regex.search(message.embeds[0].title):
             self.logger.info(f"Airdrop detected in channel: {message.channel.name}")
+            self.logger.info(message.embeds[0].description)
             embed = message.embeds[0]
             drop_amount = "Unknown"
             currency = "Unknown"
@@ -63,6 +65,12 @@ class AirdropBot(Client):
             # Extract drop details
             if "$" in embed.description and "≈" in embed.description:
                 try:
+                    button = message.components[0].children[0]
+                    if "Enter airdrop" in button.label:
+                        await button.click()
+                        self.logger.info(
+                            f"Entered airdrop in {message.channel.name} for {embed.description.split('**')[1]} {embed.description.split('**')[2].split(')')[0].replace(' (','')}"
+                        )
                     drop_amount = embed.description.split("≈")[1].split(")")[0].strip()
                     currency = embed.description.split("**")[1]
                 except IndexError:
